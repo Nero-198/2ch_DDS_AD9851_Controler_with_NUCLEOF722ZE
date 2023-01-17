@@ -1,0 +1,5 @@
+main.c:62:6:DDS_Serial_Init	8	static
+main.c:75:6:DDS_Serial_Write	56	static
+main.c:178:6:SystemClock_Config	216	static,ignoring_inline_asm
+main.c:126:5:main	80	static,ignoring_inline_asm
+main.c:357:6:Error_Handler	0	static,ignoring_inline_asm
