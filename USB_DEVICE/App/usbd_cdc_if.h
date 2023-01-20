@@ -65,7 +65,19 @@
   */
 
 /* USER CODE BEGIN EXPORTED_TYPES */
+ typedef enum
+ {
+   ReceiveBuffer_OK = 0U,
+   ReceiveBuffer_BUSY,
+   ReceiveBuffer_EMEM,
+   ReceiveBuffer_FAIL,
+ } CDC_Receive_Buffer_StatusTypeDef;
 
+ typedef struct {
+     int32_t array[100];  // 配列本体
+     int32_t len;  // 現在の配列の長さ
+ } StaticIntArray;
+extern StaticIntArray receive;
 /* USER CODE END EXPORTED_TYPES */
 
 /**
@@ -94,7 +106,7 @@
 extern USBD_CDC_ItfTypeDef USBD_Interface_fops_FS;
 
 /* USER CODE BEGIN EXPORTED_VARIABLES */
-
+extern uint8_t *received_data;
 /* USER CODE END EXPORTED_VARIABLES */
 
 /**

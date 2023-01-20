@@ -26,29 +26,35 @@
 #include "usbd_cdc_if.h"
 #include <string.h>
 #include "st7735.h"
+#include "usbd_cdc_if.h"
+#include "usbd_desc.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-
+typedef struct _AD9851_states {
+	uint32_t freq;
+	uint8_t mode;
+} DDS_t;
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define true 1
+#define false 0
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
-#define true 1
-#define false 0
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
-
 SPI_HandleTypeDef hspi1;
-
+TIM_HandleTypeDef htim2;
 UART_HandleTypeDef huart3;
 
+DDS_t DDS_CH1, DDS_CH2;
 /* USER CODE BEGIN PV */
 
 /* USER CODE END PV */
@@ -58,6 +64,7 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_USART3_UART_Init(void);
 static void MX_SPI1_Init(void);
+static void MX_TIM2_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -77,24 +84,33 @@ void DDS_Serial_Init(){
 	while(CDC_Transmit_FS((uint8_t *)log, strlen(log)) != USBD_OK){}
 }
 
-void DDS_Serial_Write(double freq){
-	double 		Double_DDS_Senddata;
-	uint64_t	DDS_Send_data,
+void DDS_Serial_Write(DDS_t *DDS_CH1, DDS_t *DDS_CH2){
+	double 		Double_DDS_Senddata_CH1,
+				Double_DDS_Senddata_CH2;
+	uint64_t	DDS_Send_data_CH1,
+				DDS_Send_data_CH2,
 				BitMask;
-	int		log_set = 1,
-			log_unset = 0;
-	Double_DDS_Senddata = 23.86092942 * freq;		//2の32�?/180MHz = 23.86092942
-	DDS_Send_data = (uint64_t)Double_DDS_Senddata;
+	Double_DDS_Senddata_CH1 = 23.86092942 * (double)DDS_CH1->freq;		//2の32?��?/180MHz = 23.86092942
+	Double_DDS_Senddata_CH2 = 23.86092942 * (double)DDS_CH2->freq;		//2の32?��?/180MHz = 23.86092942
+	DDS_Send_data_CH1 = (uint64_t)Double_DDS_Senddata_CH1;
+	DDS_Send_data_CH2 = (uint64_t)Double_DDS_Senddata_CH2;
 
 	BitMask = 0x01;
 	for (int i = 0; i < 32; i++) {
-		if(DDS_Send_data & BitMask){
+		if(DDS_Send_data_CH1 & BitMask){
 			GPIOG->BSRR = GPIO_BSRR_BS_9; //DDS_D1 set
 	//		while(CDC_Transmit_FS((uint8_t *)log_set, strlen(log_set)) != USBD_OK){}
 		}else{
 			GPIOG->BSRR = GPIO_BSRR_BR_9; //DDS_D1 unset
 //			while(CDC_Transmit_FS((uint8_t *)log_unset, strlen(log_unset)) != USBD_OK){}
 		}
+		if(DDS_Send_data_CH2 & BitMask){
+			GPIOG->BSRR = GPIO_BSRR_BS_14; //DDS_D2 set
+	//		while(CDC_Transmit_FS((uint8_t *)log_set, strlen(log_set)) != USBD_OK){}
+		}else{
+			GPIOG->BSRR = GPIO_BSRR_BR_14; //DDS_D2 unset
+//			while(CDC_Transmit_FS((uint8_t *)log_unset, strlen(log_unset)) != USBD_OK){}
+				}
 		while(GPIOG->BSRR != 0){}
 		GPIOF->BSRR = GPIO_BSRR_BS_15; //DDS_CLK set
 		while(GPIOF->BSRR != 0){}
@@ -102,13 +118,18 @@ void DDS_Serial_Write(double freq){
 		while(GPIOF->BSRR != 0){}
 		BitMask = BitMask << 1;
 	}
-	//制御設定�?�8ビッ�?
+	//制御設定�??��8ビッ?��?
 	BitMask = 0x01;
 	for (int j = 0; j < 8; j++){
 		if(0x01 & BitMask){
 			GPIOG->BSRR = GPIO_BSRR_BS_9;
 		}else{
 			GPIOG->BSRR = GPIO_BSRR_BR_9;
+		}
+		if(0x01 & BitMask){
+			GPIOG->BSRR = GPIO_BSRR_BS_14;
+		}else{
+			GPIOG->BSRR = GPIO_BSRR_BR_14;
 		}
 		while(GPIOG->BSRR != 0){}
 		GPIOF->BSRR = GPIO_BSRR_BS_15;
@@ -124,7 +145,7 @@ void DDS_Serial_Write(double freq){
 }
 
 void CDC_start_check(){
-	uint32_t timeout = 1000;  // タイ�?アウト時間をms単位で�?�?
+	uint32_t timeout = 1000;  // タイ?��?アウト時間をms単位で?��??��?
 	uint32_t start_time = HAL_GetTick();
 	unsigned char cdc_communication_start = false; //初期値
 	if(!cdc_communication_start){
@@ -135,12 +156,12 @@ void CDC_start_check(){
 		char *msg = "CDC_initial_OK!\n\r";
 	    while (CDC_Transmit_FS((uint8_t*)msg, sizeof(msg)) == USBD_BUSY) {
 	        if (HAL_GetTick() - start_time > timeout) {
-	            // タイ�?アウト�?��?
+	            // タイ?��?アウト�??��?��?
 	            break;
 	        }
 	    }
 	}else{
-	    // そ�?�他�?�コードを実�?
+	    // そ�??��他�??��コードを実�?
 	}
 
 }
@@ -156,7 +177,7 @@ int main(void)
 	//--------making LCD instance-------------------//
 	ST7735_Object_t myST7735_handle;
 	ST7735_IO_t myST7735_io;
-
+	//--------Set CDC buffer size---------------------//
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -181,21 +202,23 @@ int main(void)
   MX_USART3_UART_Init();
   MX_USB_DEVICE_Init();
   MX_SPI1_Init();
+  MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
   CDC_start_check();
   DDS_Serial_Init();
-
-  float dds_freq = 89000000.0f;
+  DDS_CH1.freq = 80000000;		//80MHz
+  DDS_CH2.freq = 110000000;	//110MHz
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  DDS_Serial_Write(dds_freq);
+	  //DDS_CH1.freq = receive.array;
+	  DDS_Serial_Write(&DDS_CH1, &DDS_CH2);
 	  char *msg = "CDC_tick!\n\r";
-	  while(CDC_Transmit_FS((uint8_t *)msg, strlen(msg)) != USBD_OK){}
-	  HAL_GPIO_TogglePin(LD1_GPIO_Port, LD1_Pin);
+	//while(CDC_Transmit_FS((uint8_t *)&received_data, strlen(msg)) != USBD_OK){}
+	//  HAL_GPIO_TogglePin(LD1_GPIO_Port, LD1_Pin);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -300,6 +323,51 @@ static void MX_SPI1_Init(void)
   /* USER CODE BEGIN SPI1_Init 2 */
 
   /* USER CODE END SPI1_Init 2 */
+
+}
+
+/**
+  * @brief TIM2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM2_Init(void)
+{
+
+  /* USER CODE BEGIN TIM2_Init 0 */
+
+  /* USER CODE END TIM2_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM2_Init 1 */
+
+  /* USER CODE END TIM2_Init 1 */
+  htim2.Instance = TIM2;
+  htim2.Init.Prescaler = 10800;
+  htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim2.Init.Period = 4294967295;
+  htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim2, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM2_Init 2 */
+
+  /* USER CODE END TIM2_Init 2 */
 
 }
 

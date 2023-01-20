@@ -33,6 +33,12 @@
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
 
+StaticIntArray receive = {0};
+
+enum _Receive_states {
+	Receive_OK = 0,
+	Receive_OverFlow = 1
+};
 /* USER CODE END PV */
 
 /** @addtogroup STM32_USB_OTG_DEVICE_LIBRARY
@@ -110,7 +116,7 @@ uint8_t UserTxBufferFS[APP_TX_DATA_SIZE];
 extern USBD_HandleTypeDef hUsbDeviceFS;
 
 /* USER CODE BEGIN EXPORTED_VARIABLES */
-
+ uint8_t *received_data;
 /* USER CODE END EXPORTED_VARIABLES */
 
 /**
@@ -129,7 +135,15 @@ static int8_t CDC_Receive_FS(uint8_t* pbuf, uint32_t *Len);
 static int8_t CDC_TransmitCplt_FS(uint8_t *pbuf, uint32_t *Len, uint8_t epnum);
 
 /* USER CODE BEGIN PRIVATE_FUNCTIONS_DECLARATION */
+StaticIntArray *StaticIntArray_PushBack(StaticIntArray *self, int32_t elem) {
+    int32_t capa = sizeof(self->array) / sizeof(self->array[0]);
+    if (self->len >= capa) {
+        return Receive_OverFlow;  // 配列の容量が足りない
+    }
 
+    self->array[self->len++] = elem;
+    return Receive_OK;
+}
 /* USER CODE END PRIVATE_FUNCTIONS_DECLARATION */
 
 /**
@@ -264,6 +278,24 @@ static int8_t CDC_Receive_FS(uint8_t* Buf, uint32_t *Len)
   /* USER CODE BEGIN 6 */
   USBD_CDC_SetRxBuffer(&hUsbDeviceFS, &Buf[0]);
   USBD_CDC_ReceivePacket(&hUsbDeviceFS);
+
+  uint8_t sendBuf[64];
+  if (*Len && *Len < 64){
+	  for (int i = 0; i < *Len; i++)
+	  {
+		  sendBuf[i] = Buf[i];
+	  }
+	  CDC_Transmit_FS(sendBuf, *Len);
+	  if(StaticIntArray_PushBack(&receive, sendBuf) == Receive_OverFlow){
+		  char *msg = "Too many Description! CDC_Receive Buffer Overflow!\n\r";
+		  CDC_Transmit_FS((uint8_t *)&msg, strlen(msg));
+		  for (uint8_t i = 0; i <= receive.len; ++i) {
+			  receive.array[i] = 0;
+		}
+		  receive.len = 0;
+	  }
+  }
+
   return (USBD_OK);
   /* USER CODE END 6 */
 }
