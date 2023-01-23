@@ -74,8 +74,8 @@
  } CDC_Receive_Buffer_StatusTypeDef;
 
  typedef struct {
-     int32_t array[100];  // 配列本体
-     int32_t len;  // 現在の配列の長さ
+     int32_t array[100];  // 配�?�本�?
+     int32_t len;  // 現在の配�?��?�長�?
  } StaticIntArray;
 extern StaticIntArray receive;
 /* USER CODE END EXPORTED_TYPES */

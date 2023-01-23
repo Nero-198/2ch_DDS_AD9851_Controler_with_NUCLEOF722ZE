@@ -28,6 +28,7 @@
 #include "st7735.h"
 #include "usbd_cdc_if.h"
 #include "usbd_desc.h"
+#include "sine_LUT.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -47,14 +48,19 @@ typedef struct _AD9851_states {
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
+DDS_t DDS_CH1;
+DDS_t DDS_CH2;
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+
 SPI_HandleTypeDef hspi1;
+
 TIM_HandleTypeDef htim2;
+TIM_HandleTypeDef htim6;
+
 UART_HandleTypeDef huart3;
 
-DDS_t DDS_CH1, DDS_CH2;
 /* USER CODE BEGIN PV */
 
 /* USER CODE END PV */
@@ -65,6 +71,7 @@ static void MX_GPIO_Init(void);
 static void MX_USART3_UART_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_TIM2_Init(void);
+static void MX_TIM6_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -90,8 +97,8 @@ void DDS_Serial_Write(DDS_t *DDS_CH1, DDS_t *DDS_CH2){
 	uint64_t	DDS_Send_data_CH1,
 				DDS_Send_data_CH2,
 				BitMask;
-	Double_DDS_Senddata_CH1 = 23.86092942 * (double)DDS_CH1->freq;		//2の32?��?/180MHz = 23.86092942
-	Double_DDS_Senddata_CH2 = 23.86092942 * (double)DDS_CH2->freq;		//2の32?��?/180MHz = 23.86092942
+	Double_DDS_Senddata_CH1 = 23.86092942 * (double)DDS_CH1->freq;		//2の32/180MHz = 23.86092942
+	Double_DDS_Senddata_CH2 = 23.86092942 * (double)DDS_CH2->freq;		//2の32/180MHz = 23.86092942
 	DDS_Send_data_CH1 = (uint64_t)Double_DDS_Senddata_CH1;
 	DDS_Send_data_CH2 = (uint64_t)Double_DDS_Senddata_CH2;
 
@@ -118,7 +125,7 @@ void DDS_Serial_Write(DDS_t *DDS_CH1, DDS_t *DDS_CH2){
 		while(GPIOF->BSRR != 0){}
 		BitMask = BitMask << 1;
 	}
-	//制御設定�??��8ビッ?��?
+	//制御設定�??????��?��??��?��???��?��??��?��????��?��??��?��???��?��??��?��8ビッ?????��?��??��?��???��?��??��?��????��?��??��?��???��?��??��?��?
 	BitMask = 0x01;
 	for (int j = 0; j < 8; j++){
 		if(0x01 & BitMask){
@@ -145,7 +152,7 @@ void DDS_Serial_Write(DDS_t *DDS_CH1, DDS_t *DDS_CH2){
 }
 
 void CDC_start_check(){
-	uint32_t timeout = 1000;  // タイ?��?アウト時間をms単位で?��??��?
+	uint32_t timeout = 1000;
 	uint32_t start_time = HAL_GetTick();
 	unsigned char cdc_communication_start = false; //初期値
 	if(!cdc_communication_start){
@@ -156,13 +163,17 @@ void CDC_start_check(){
 		char *msg = "CDC_initial_OK!\n\r";
 	    while (CDC_Transmit_FS((uint8_t*)msg, sizeof(msg)) == USBD_BUSY) {
 	        if (HAL_GetTick() - start_time > timeout) {
-	            // タイ?��?アウト�??��?��?
+
 	            break;
 	        }
 	    }
 	}else{
-	    // そ�??��他�??��コードを実�?
+	    //
 	}
+
+}
+
+void freq_modulation_sine(uint32_t modulation_freq, uint32_t modulation_depth){
 
 }
 /* USER CODE END 0 */
@@ -175,8 +186,8 @@ int main(void)
 {
   /* USER CODE BEGIN 1 */
 	//--------making LCD instance-------------------//
-	ST7735_Object_t myST7735_handle;
-	ST7735_IO_t myST7735_io;
+	//ST7735_Object_t myST7735_handle;
+	//ST7735_IO_t myST7735_io;
 	//--------Set CDC buffer size---------------------//
   /* USER CODE END 1 */
 
@@ -203,11 +214,14 @@ int main(void)
   MX_USB_DEVICE_Init();
   MX_SPI1_Init();
   MX_TIM2_Init();
+  MX_TIM6_Init();
   /* USER CODE BEGIN 2 */
   CDC_start_check();
   DDS_Serial_Init();
+  HAL_TIM_Base_Start_IT(&htim2);
+  HAL_TIM_Base_Start_IT(&htim6);
   DDS_CH1.freq = 80000000;		//80MHz
-  DDS_CH2.freq = 110000000;	//110MHz
+  DDS_CH2.freq = 110000000;		//110MHz
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -216,8 +230,10 @@ int main(void)
   {
 	  //DDS_CH1.freq = receive.array;
 	  DDS_Serial_Write(&DDS_CH1, &DDS_CH2);
-	  char *msg = "CDC_tick!\n\r";
-	//while(CDC_Transmit_FS((uint8_t *)&received_data, strlen(msg)) != USBD_OK){}
+	  HAL_TIM_Base_GetState(&htim2);
+	 // char *msg = (char *)DDS_CH1.freq;
+	//  char *msg = "CDC_tick!\n\r";
+	//while(CDC_Transmit_FS((uint8_t *)msg, strlen(msg)) != USBD_OK){}
 	//  HAL_GPIO_TogglePin(LD1_GPIO_Port, LD1_Pin);
     /* USER CODE END WHILE */
 
@@ -347,9 +363,9 @@ static void MX_TIM2_Init(void)
   htim2.Instance = TIM2;
   htim2.Init.Prescaler = 10800;
   htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 4294967295;
+  htim2.Init.Period = 10000;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
   if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
   {
     Error_Handler();
@@ -368,6 +384,44 @@ static void MX_TIM2_Init(void)
   /* USER CODE BEGIN TIM2_Init 2 */
 
   /* USER CODE END TIM2_Init 2 */
+
+}
+
+/**
+  * @brief TIM6 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM6_Init(void)
+{
+
+  /* USER CODE BEGIN TIM6_Init 0 */
+
+  /* USER CODE END TIM6_Init 0 */
+
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM6_Init 1 */
+
+  /* USER CODE END TIM6_Init 1 */
+  htim6.Instance = TIM6;
+  htim6.Init.Prescaler = 10800;
+  htim6.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim6.Init.Period = 10;
+  htim6.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
+  if (HAL_TIM_Base_Init(&htim6) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim6, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM6_Init 2 */
+
+  /* USER CODE END TIM6_Init 2 */
 
 }
 
@@ -487,6 +541,24 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+
+void HAL_TIM_PeriodElapsedCallback (TIM_HandleTypeDef * htim6){
+	DDS_CH1.freq = DDS_CH1.freq + 10000;
+		if (DDS_CH1.freq >= 85000000) {
+			DDS_CH1.freq = 65000000;
+		}
+	DDS_CH2.freq = DDS_CH2.freq + 10000;
+		if (DDS_CH2.freq >= 120000000) {
+			DDS_CH2.freq = 100000000;
+		}
+		HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
+}
+
+
+
+void HAL_TIM_OC_DelayElapsedCallback(TIM_HandleTypeDef * htim6){
+
+}
 
 /* USER CODE END 4 */
 

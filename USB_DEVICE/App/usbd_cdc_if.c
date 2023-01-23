@@ -138,7 +138,7 @@ static int8_t CDC_TransmitCplt_FS(uint8_t *pbuf, uint32_t *Len, uint8_t epnum);
 StaticIntArray *StaticIntArray_PushBack(StaticIntArray *self, int32_t elem) {
     int32_t capa = sizeof(self->array) / sizeof(self->array[0]);
     if (self->len >= capa) {
-        return Receive_OverFlow;  // 配列の容量が足りない
+        return Receive_OverFlow;  // 配�?��?�容量が足りな�?
     }
 
     self->array[self->len++] = elem;

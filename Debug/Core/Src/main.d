@@ -44,7 +44,7 @@ Core/Src/main.o: ../Core/Src/main.c ../Core/Inc/main.h \
  ../Middlewares/ST/STM32_USB_Device_Library/Core/Inc/usbd_ioreq.h \
  ../Middlewares/ST/STM32_USB_Device_Library/Core/Inc/usbd_ctlreq.h \
  ../Core/Inc/st7735.h ../Core/Inc/st7735_reg.h \
- ../USB_DEVICE/App/usbd_desc.h
+ ../USB_DEVICE/App/usbd_desc.h ../Core/Inc/Look_Up_Table/sine_LUT.h
 
 ../Core/Inc/main.h:
 
@@ -143,3 +143,5 @@ Core/Src/main.o: ../Core/Src/main.c ../Core/Inc/main.h \
 ../Core/Inc/st7735_reg.h:
 
 ../USB_DEVICE/App/usbd_desc.h:
+
+../Core/Inc/Look_Up_Table/sine_LUT.h:
